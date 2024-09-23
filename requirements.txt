@@ -1,1 +1,10 @@
 streamlit
+pandas
+numpy
+requests
+scikit-learn
+google-cloud-storage
+google-cloud-firestore
+google-auth
+streamlit-star-rating
+Pillow
