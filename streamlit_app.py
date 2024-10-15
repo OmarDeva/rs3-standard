@@ -404,16 +404,37 @@ def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
             st.error(f"Product ID {product_id} not found in Product IDs!")
             return []
 
+        # Get the product type of the input product
+        query_row = fashion_df[fashion_df['ProductId'].astype(str) == product_id].iloc[0]
+        query_product_type = query_row['ProductType']  # Match based on 'ProductType'
+
+        # Extract features and compute pairwise distances
         doc_id = Productids.index(product_id)
-        extracted_features = normalize(extracted_features)
+        query_feature = extracted_features[doc_id].reshape(1, -1)
+        pairwise_dist = pairwise_distances(extracted_features, query_feature)
+        indices = np.argsort(pairwise_dist.flatten())
 
-        pairwise_dist = pairwise_distances(extracted_features, extracted_features[doc_id].reshape(1, -1), metric='euclidean')
-        indices = np.argsort(pairwise_dist.flatten())[1:num_results+1]
-        similar_product_ids = [Productids[i] for i in indices]
+        available_results = min(num_results + 1, len(indices))
+
+        # Find products with matching product type
+        similar_product_ids = []
+        recommended_count = 0
+        for idx in range(1, len(indices)):  # Skip the input product itself
+            if recommended_count >= num_results:
+                break
+
+            sim_idx = indices[idx]
+            sim_product_id = Productids[sim_idx]
+            row = fashion_df[fashion_df['ProductId'].astype(str) == sim_product_id].iloc[0]
+
+            # Check if the product type matches the input product's type
+            if row['ProductType'] == query_product_type:
+                similar_product_ids.append(sim_product_id)
+                recommended_count += 1
+
         similar_products = fashion_df[fashion_df['ProductId'].isin(similar_product_ids)]
-
-        logging.info(f"Retrieved {len(similar_products)} similar products for product_id: {product_id}")
         return similar_products
+
     except Exception as e:
         logging.error(f"Failed to get similar products for {product_id}: {e}")
         st.error("Failed to retrieve similar products.")
