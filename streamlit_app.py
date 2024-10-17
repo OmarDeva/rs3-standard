@@ -117,6 +117,7 @@ if not user_id:
 # User inputs for age and sex
 user_age = st.sidebar.number_input("Enter your age", min_value=18, max_value=100, value=25)
 user_sex = st.sidebar.selectbox("Select your sex", ["Male", "Female"])
+st.session_state['user_age'] = user_age
 
 # ============================
 # Define Product IDs for Men and Women
@@ -377,7 +378,7 @@ def save_purchase_information(db, cart_items):
 # ============================
 # Similar Products Function
 # ============================
-def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
+def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex, user_age):
     try:
         if user_sex == "Male":
             gender_filter = "Men"
@@ -385,7 +386,7 @@ def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
             gender_filter = "Women"
         else:
             st.error("Invalid gender selected!")
-            return []
+            return pd.DataFrame()
 
         if gender_filter == "Men":
             men_features_data = download_blob_to_memory_cached('rec_bucket_1', 'Men_ResNet_features.npy')
@@ -402,7 +403,7 @@ def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
 
         if product_id not in Productids:
             st.error(f"Product ID {product_id} not found in Product IDs!")
-            return []
+            return pd.DataFrame()
 
         # Get the product type of the input product
         query_row = fashion_df[fashion_df['ProductId'].astype(str) == product_id].iloc[0]
@@ -416,7 +417,43 @@ def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
 
         available_results = min(num_results + 1, len(indices))
 
-        # Find products with matching product type
+        # Define age ranges for color preferences
+        age_ranges = {
+            'Men': {
+                'Navy Blue': (18, 44),
+                'Grey': (45, 90),
+                'Brown': (45, 90),
+                'Black': (18, 55),
+                'Olive': (25, 55),
+                'Blue': (18, 44),
+                'White': (18, 44),
+                'Green': (45, 90),
+                'Red': (45, 90),
+                'Yellow': (18, 34),
+            },
+            'Women': {
+                'Pink': (18, 25),
+                'Turquoise Blue': (18, 44),
+                'Magenta': (18, 44),
+                'Purple': (18, 44),
+                'Lavender': (25, 55),
+                'Peach': (18, 34),
+                'Maroon': (45, 90),
+                'Grey': (45, 90),
+                'Brown': (45, 90),
+                'Black': (20, 50),
+                'White': (18, 30),
+                'Red': (45, 90),
+            }
+        }
+
+        # Get preferred colors based on age
+        preferred_colors = [
+            color for color, (min_age, max_age) in age_ranges[gender_filter].items()
+            if min_age <= user_age <= max_age
+        ]
+
+        # Find products with matching product type and preferred colors
         similar_product_ids = []
         recommended_count = 0
         for idx in range(1, len(indices)):  # Skip the input product itself
@@ -427,8 +464,8 @@ def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
             sim_product_id = Productids[sim_idx]
             row = fashion_df[fashion_df['ProductId'].astype(str) == sim_product_id].iloc[0]
 
-            # Check if the product type matches the input product's type
-            if row['ProductType'] == query_product_type:
+            # Check if the product type matches the input product's type and if the color is preferred
+            if row['ProductType'] == query_product_type and row['Colour'] in preferred_colors:
                 similar_product_ids.append(sim_product_id)
                 recommended_count += 1
 
@@ -438,7 +475,9 @@ def get_similar_products_cnn(product_id, num_results, fashion_df, user_sex):
     except Exception as e:
         logging.error(f"Failed to get similar products for {product_id}: {e}")
         st.error("Failed to retrieve similar products.")
-        return []
+        return pd.DataFrame()
+
+
 
 # ============================
 # Fetch and Cache Image Function
@@ -587,7 +626,9 @@ def show_product_page(product):
         logging.info(f"View count incremented for product_id: {product_id}")
 
     st.markdown("### Similar Products")
-    similar_products = get_similar_products_cnn(product['ProductId'], 8, fashion_df, user_sex)
+    similar_products = get_similar_products_cnn(
+        product['ProductId'], 8, fashion_df, user_sex, user_age
+    )
     if similar_products.empty:
         st.write("No similar products found.")
     else:
@@ -737,7 +778,7 @@ if "checkout" in st.session_state and st.session_state['checkout']:
                 st.success("Thank you for your purchase!")
 
                 # Qualtrics survey link
-                survey_url = "https://omaralanbari.com"
+                survey_url = "https://utsau.au1.qualtrics.com/jfe/form/SV_bwTIRtLkGnoBbGC"
                 st.markdown(f"Please proceed to our [Qualtrics survey]({survey_url}) to complete your experience. We appreciate your feedback!")
 
                 st.session_state['cart'] = {}
